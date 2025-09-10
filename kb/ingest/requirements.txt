@@ -1,0 +1,5 @@
+pypdf
+sentence-transformers
+psycopg2-binary
+numpy
+pyyaml

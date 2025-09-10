@@ -1,0 +1,22 @@
+# secrets
+.env
+*.env
+
+# python
+__pycache__/
+*.pyc
+kb/ingest/.venv/
+
+# embeddings & private docs
+kb/data/**
+!kb/data/.keep
+
+# node
+web/node_modules/
+
+# dotnet
+api/**/bin/
+api/**/obj/
+
+# docker volumes
+ops/volumes/**
