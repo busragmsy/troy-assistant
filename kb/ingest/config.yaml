@@ -1,27 +1,39 @@
 doc_map:
-  "LC.FIP.KL.005":
+  "LC.FIP.KL.005":         # İlk Fiyat Revize Ekranı Kullanıcı Kılavuzu
     menu_item: "ilk_fiyat_revize"
-    roles: ["PricingAnalyst","Admin"]
-  "LC.FIP.TL.007":
+    roles: ["PricingAnalyst", "PricingManager"]
+    version: "2025-03-07"
+    lang: "tr"
+  "LC.FIP.TL.007":         # Psikolojik Fiyat Talimatı
     menu_item: "psikolojik_fiyat"
-    roles: ["PricingAnalyst","Admin"]
-  "LC.FIP.TL.004":
-    menu_item: "yurtdisi_fiyat_revize_indirim_iptal"
-    roles: ["PricingAnalyst","Admin"]
+    roles: ["PricingAnalyst", "PricingManager"]
+    version: "2025-02-15"
+    lang: "tr"
   "LC.FIP.TL.008":
     menu_item: "devir_urun_fiyat_ayarlama"
-    roles: ["PricingAnalyst","Admin"]
+    roles: ["PricingAnalyst"]
+    version: "2025-02-20"
+    lang: "tr"
+  "LC.FIP.TL.004":
+    menu_item: "yurt_disi_fiyat_revize_indirim_iptal"
+    roles: ["PricingAnalyst", "IntlPricing"]
+    version: "2025-01-30"
+    lang: "tr"
   "LC.FIP.KL.002":
-    menu_item: "yurtdisi_ongoru_fiyat_raporu"
-    roles: ["PricingAnalyst","Admin"]
+    menu_item: "ongoru_fiyat_raporu"
+    roles: ["PricingAnalyst"]
+    version: "2025-02-10"
+    lang: "tr"
 
 chunk:
   size: 900          # ~900 kelime
   overlap: 150       # ~%15-20 bindirme
   min_len: 200       # çok kısa parçaları at
+  max_tokens: 1000
 
 model:
   name: "intfloat/multilingual-e5-large"
+  dim: 1024
   batch_size: 16
   normalize: true
 
