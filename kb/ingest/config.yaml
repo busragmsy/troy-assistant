@@ -1,0 +1,32 @@
+doc_map:
+  "LC.FIP.KL.005":
+    menu_item: "ilk_fiyat_revize"
+    roles: ["PricingAnalyst","Admin"]
+  "LC.FIP.TL.007":
+    menu_item: "psikolojik_fiyat"
+    roles: ["PricingAnalyst","Admin"]
+  "LC.FIP.TL.004":
+    menu_item: "yurtdisi_fiyat_revize_indirim_iptal"
+    roles: ["PricingAnalyst","Admin"]
+  "LC.FIP.TL.008":
+    menu_item: "devir_urun_fiyat_ayarlama"
+    roles: ["PricingAnalyst","Admin"]
+  "LC.FIP.KL.002":
+    menu_item: "yurtdisi_ongoru_fiyat_raporu"
+    roles: ["PricingAnalyst","Admin"]
+
+chunk:
+  size: 900          # ~900 kelime
+  overlap: 150       # ~%15-20 bindirme
+  min_len: 200       # çok kısa parçaları at
+
+model:
+  name: "intfloat/multilingual-e5-large"
+  batch_size: 16
+  normalize: true
+
+ingest:
+  data_dir: "../data"
+  batch_insert: 200   # execute_values ile toplu yazım
+  detect_sections: true
+  keep_pages: true    # sayfa aralıklarını yaz

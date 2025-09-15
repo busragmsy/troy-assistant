@@ -3,3 +3,5 @@ sentence-transformers
 psycopg2-binary
 numpy
 pyyaml
+regex
+psycopg2
