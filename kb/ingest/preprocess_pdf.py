@@ -1,7 +1,6 @@
 # kb/ingest/preprocess_pdf.py
 from pypdf import PdfReader
 import regex as re
-from unidecode import unidecode
 
 SECTION_RE = re.compile(
     r"^(?:\d+(?:\.\d+)*\)|\d+(?:\.\d+)*\s+|[A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜ\s]{5,}|•|-)\s+",
@@ -9,13 +8,9 @@ SECTION_RE = re.compile(
 )
 
 def clean_text(t: str) -> str:
-    # Temizlik: fazla boşluk, kırık satırlar vs.
     t = t.replace('\r', '')
-    # Peşpeşe 3+ boş satırı 2'ye düşür
     t = re.sub(r'\n{3,}', '\n\n', t)
-    # Satır sonu tire kopmaları: "fiyat-\nlandırma" -> "fiyatlandırma"
     t = re.sub(r'-\n', '', t)
-    # Çok boşluk -> tek boşluk (satır içi)
     t = re.sub(r'[ \t]{2,}', ' ', t)
     return t.strip()
 
@@ -35,18 +30,16 @@ def split_sections(pages):
     Sayfa metinlerini birleştir, SECTION_RE ile bölümlere ayır, her bölümün
     başlangıç ve bitiş sayfa numarasını koru.
     """
-    # sayfa sınırlarını koruyarak tek metin inşa et
-    offsets = []  # [(start_char, end_char, page_no)]
+    offsets = [] 
     buf = []
     pos = 0
     for num, txt in pages:
         start = pos
-        buf.append(txt + "\n\n")  # sayfalar arası boşluk
+        buf.append(txt + "\n\n")
         pos += len(txt) + 2
         offsets.append((start, pos, num))
     full = "".join(buf)
 
-    # Bölümleri işaretle
     sections = []
     last_idx = 0
     for m in SECTION_RE.finditer(full):
@@ -54,17 +47,16 @@ def split_sections(pages):
         if start > last_idx:
             sections.append((last_idx, start))
         last_idx = start
-    # son parça
+
     if last_idx < len(full):
         sections.append((last_idx, len(full)))
 
-    # bölüm -> sayfa aralığı çöz
     def span_to_pages(s, e):
         ps = []
         for (a, b, pg) in offsets:
-            if b <= s:  # bu sayfa tamamen önce
+            if b <= s:
                 continue
-            if a >= e:  # bu sayfa tamamen sonra
+            if a >= e:
                 break
             ps.append(pg)
         if not ps:
@@ -101,9 +93,7 @@ def chunkify_section(text: str, max_tokens: int = 1000, overlap: int = 150):
     return chunks
 
 def detect_section_title(chunk_text: str):
-    # ilk satırı veya ilk kalın başlık havasındaki kısmı başlık say
     first_line = chunk_text.splitlines()[0].strip()
-    # çok uzun ise kısalt
     return (first_line[:120] + "…") if len(first_line) > 120 else first_line
 
 def parse_pdf_advanced(pdf_path: str, lang: str = "tr", max_tokens=1000, overlap=150):

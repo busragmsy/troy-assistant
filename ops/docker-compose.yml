@@ -1,27 +1,101 @@
 version: "3.9"
+
 services:
   pg:
     image: pgvector/pgvector:pg16
     container_name: troy_pg
-    environment:
-      POSTGRES_USER: troy
-      POSTGRES_PASSWORD: troy
-      POSTGRES_DB: kb
+    restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U troy -d kb"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
     volumes:
-      - C:/troy-assistant/kb/schema/init.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+      - pg_data:/var/lib/postgresql/data
+      - ../kb/schema/init.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+      - ./postgres.conf:/etc/postgresql/postgresql.conf:ro
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    command: ["-c", "config_file=/etc/postgresql/postgresql.conf"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [troy_network]
+    deploy:
+      resources:
+        limits: { memory: 1G, cpus: "1.0" }
+        reservations: { memory: 512M, cpus: "0.5" }
 
   adminer:
-    image: adminer
+    image: adminer:latest
     container_name: troy_adminer
+    restart: unless-stopped
     depends_on:
       pg:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: pg
+      ADMINER_DESIGN: "hydra"
+    networks: [troy_network]
+    deploy:
+      resources:
+        limits: { memory: 256M, cpus: "0.5" }
+
+  kb_worker:
+    image: python:3.11-slim
+    container_name: troy_kb_worker
+    profiles: ["worker"]
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      DB_HOST: pg
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      - ../:/app
+    command: ["bash","-lc","pip install -r requirements.txt && tail -f /dev/null"]
+    depends_on:
+      pg:
+        condition: service_healthy
+    networks: [troy_network] 
+
+  pg_backup:
+    image: postgres:16
+    container_name: troy_backup
+    restart: "no"
+    depends_on:
+      pg:
+        condition: service_healthy
+    environment:
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      PGHOST: pg
+    volumes:
+      - ../kb/backups:/backups
+      - ../kb/scripts:/scripts:ro
+    networks: [troy_network]
+    profiles: ["backup"]
+    command: >
+      bash -c "echo 'Backup container ready.
+      Run: docker-compose run --rm pg_backup /scripts/backup.sh'"
+
+volumes:
+  pg_data:
+    driver: local
+    name: troy_pg_data
+
+networks:
+  troy_network:
+    driver: bridge
+    name: troy_network
+

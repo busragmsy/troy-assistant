@@ -1,7 +1,11 @@
-pypdf
-sentence-transformers
-psycopg2-binary
-numpy
-pyyaml
+psycopg2-binary==2.9.10
+beautifulsoup4
+lxml
+pytesseract
+Pillow
+pdfminer.six
 regex
-psycopg2
+pyyaml
+numpy
+PyPDF2==3.0.1
+openai

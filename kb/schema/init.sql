@@ -1,52 +1,155 @@
-CREATE EXTENSION IF NOT EXISTS vector;
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS vector; -- pgvector
 CREATE EXTENSION IF NOT EXISTS unaccent;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- Bilgi parçası tablosu (RAG)
-CREATE TABLE IF NOT EXISTS knowledge_chunks (
-  id             UUID PRIMARY KEY,
-  doc_id         TEXT NOT NULL,          -- LC.FIP.KL.005
-  menu_item      TEXT NOT NULL,          -- 'ilk_fiyat_revize' vb.
-  sub_context    TEXT,                   -- opsiyonel: islem/rapor alt bağlamı
-  section        TEXT,                   -- başlık/alt başlık
-  title          TEXT,
-  content        TEXT NOT NULL,
-  embedding      VECTOR(1024) NOT NULL,  -- e5-large (normalize edilmiş)
-  allowed_roles  TEXT[] NOT NULL,        -- ["PricingAnalyst","Admin"]
-  doc_version    TEXT,                   -- v1, v2...
-  source         TEXT,                   -- dosya adı
-  source_page_from INT,                  -- sayfa aralığı (isteğe bağlı)
-  source_page_to   INT,
-  is_active      BOOLEAN DEFAULT TRUE,
-  valid_from     TIMESTAMP DEFAULT now(),
-  valid_to       TIMESTAMP,
-  updated_at     TIMESTAMP DEFAULT now()
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS trigger AS $$
+BEGIN
+NEW.updated_at = NOW();
+RETURN NEW;
+END; $$ LANGUAGE plpgsql;
+
+-- ============ Ana tablolar ============
+CREATE TABLE IF NOT EXISTS documents (
+id BIGSERIAL PRIMARY KEY,
+title VARCHAR(500) NOT NULL,
+document_type VARCHAR(100) NOT NULL,
+file_name VARCHAR(255),
+file_path TEXT,
+mime_type VARCHAR(100),
+size_bytes BIGINT,
+department VARCHAR(100),
+document_code VARCHAR(50),
+version_number VARCHAR(20),
+publish_date DATE,
+revision_date DATE,
+status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active','archived','draft')),
+language VARCHAR(10) DEFAULT 'tr',
+checksum_sha1 CHAR(40),
+source_url TEXT,
+created_at TIMESTAMP DEFAULT NOW(),
+updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS error_knowledge (
-  id           UUID PRIMARY KEY,
-  error_code   TEXT,                     -- örn: ERR1234
-  pattern      TEXT,                     -- LIKE/regex için kalıp
-  solution     TEXT,                     -- kısaca çözüm adımları
-  severity     TEXT,                     -- info|warn|critical
-  menu_item    TEXT,
-  allowed_roles TEXT[],
-  source       TEXT,
-  updated_at   TIMESTAMP DEFAULT now()
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_documents_code_version
+ON documents (document_code, COALESCE(version_number,''));
+
+
+CREATE TABLE IF NOT EXISTS document_sections (
+id BIGSERIAL PRIMARY KEY,
+document_id BIGINT REFERENCES documents(id) ON DELETE CASCADE,
+section_title VARCHAR(500),
+section_number VARCHAR(20),
+content TEXT NOT NULL,
+page_number INTEGER,
+word_count INTEGER,
+created_at TIMESTAMP DEFAULT NOW(),
+updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_chunks_menu    ON knowledge_chunks(menu_item);
-CREATE INDEX IF NOT EXISTS idx_chunks_roles   ON knowledge_chunks USING GIN (allowed_roles);
-CREATE INDEX IF NOT EXISTS idx_chunks_docid   ON knowledge_chunks(doc_id);
-CREATE INDEX IF NOT EXISTS idx_chunks_active  ON knowledge_chunks(is_active);
 
--- Büyük veri için ANN (Approximate) ivfflat cosine index (VERİ YÜKLENDİKTEN SONRA OLUŞTUR!)
--- Başlangıçta ÇALIŞTIRMA; yükleme bitince aşağıdakini çalıştır:
--- CREATE INDEX idx_chunks_ivfflat
---   ON knowledge_chunks
---   USING ivfflat (embedding vector_cosine_ops)
---   WITH (lists = 100);
+CREATE TABLE IF NOT EXISTS document_embeddings (
+id BIGSERIAL PRIMARY KEY,
+section_id BIGINT REFERENCES document_sections(id) ON DELETE CASCADE,
+embedding vector(1536), -- text-embedding-3-small
+model_name VARCHAR(100) DEFAULT 'text-embedding-3-small',
+created_at TIMESTAMP DEFAULT NOW()
+);
 
 
-CREATE INDEX IF NOT EXISTS idx_chunks_trgm ON knowledge_chunks
-  USING GIN (content gin_trgm_ops);
+CREATE TABLE IF NOT EXISTS document_keywords (
+id BIGSERIAL PRIMARY KEY,
+document_id BIGINT REFERENCES documents(id) ON DELETE CASCADE,
+keyword VARCHAR(100) NOT NULL,
+weight REAL DEFAULT 1.0,
+created_at TIMESTAMP DEFAULT NOW()
+);
+
+
+CREATE TABLE IF NOT EXISTS categories (
+id BIGSERIAL PRIMARY KEY,
+name VARCHAR(200) NOT NULL,
+parent_id BIGINT REFERENCES categories(id),
+description TEXT,
+created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ============ Index’ler ============
+CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(document_type);
+CREATE INDEX IF NOT EXISTS idx_documents_department ON documents(department);
+CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
+CREATE INDEX IF NOT EXISTS idx_documents_code ON documents(document_code);
+
+
+CREATE INDEX IF NOT EXISTS idx_sections_document ON document_sections(document_id);
+CREATE INDEX IF NOT EXISTS idx_embeddings_section ON document_embeddings(section_id);
+CREATE INDEX IF NOT EXISTS idx_keywords_document ON document_keywords(document_id);
+CREATE INDEX IF NOT EXISTS idx_keywords_keyword ON document_keywords(keyword);
+
+
+CREATE INDEX IF NOT EXISTS idx_embeddings_vector
+ON document_embeddings
+USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+
+CREATE INDEX IF NOT EXISTS idx_sections_content_fts
+ON document_sections USING gin (to_tsvector('turkish', unaccent(content)));
+
+
+CREATE INDEX IF NOT EXISTS idx_documents_title_fts
+ON documents USING gin (to_tsvector('turkish', unaccent(title)));
+
+
+CREATE INDEX IF NOT EXISTS idx_training_active
+ON training_content (topic_category, difficulty_level)
+WHERE status = 'active';
+
+
+-- ============ Trigger’lar ============
+CREATE TRIGGER trg_documents_updated
+BEFORE UPDATE ON documents
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+CREATE TRIGGER trg_sections_updated
+BEFORE UPDATE ON document_sections
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+CREATE TRIGGER trg_doc_usage_updated
+BEFORE UPDATE ON document_usage
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+CREATE TRIGGER trg_training_updated
+BEFORE UPDATE ON training_content
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+CREATE TRIGGER trg_user_training_updated
+BEFORE UPDATE ON user_training_progress
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+-- ============ Kategori başlangıç verisi ============
+INSERT INTO categories (name, description) VALUES
+('Fiyat ve İndirim', 'Fiyatlandırma süreçleri ve indirim yönetimi'),
+('Yurt Dışı İşlemleri', 'Uluslararası operasyonlar ve süreçler'),
+('Troy Sistemi', 'Troy yazılım sistemi kullanımı'),
+('Kullanıcı Kılavuzları', 'Sistem kullanım kılavuzları'),
+('İş Süreçleri', 'Operasyonel iş süreçleri ve talimatlar'),
+('Yazılım Geliştirme', 'Agile, Scrum ve yazılım süreçleri')
+ON CONFLICT DO NOTHING;
+
+
+INSERT INTO categories (name, parent_id, description)
+SELECT 'Psikolojik Fiyat', id, 'Psikolojik fiyatlandırma yönetimi' FROM categories WHERE name='Fiyat ve İndirim'
+UNION ALL
+SELECT 'Devir Ürünler', id, 'Sezon geçiş ürün fiyatları' FROM categories WHERE name='Fiyat ve İndirim'
+UNION ALL
+SELECT 'Corporate Ülkeler', id, 'Şirket kontrolündeki ülke operasyonları' FROM categories WHERE name='Yurt Dışı İşlemleri'
+UNION ALL
+SELECT 'Franchise Ülkeler', id, 'Franchise ülke operasyonları' FROM categories WHERE name='Yurt Dışı İşlemleri'
+ON CONFLICT DO NOTHING;
+
