@@ -5,6 +5,7 @@ from typing import List, Dict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from datetime import datetime
 
 app = FastAPI(title="Troy KB Chatbot API")
 
@@ -202,6 +203,154 @@ Cevap:"""
 class ChatRequest(BaseModel):
     message: str
 
+class DocumentUpload(BaseModel):
+    title: str
+    content: str
+    category: str = "genel"
+    tags: List[str] = []
+
+class TrainingContentCreate(BaseModel):
+    title: str
+    description: str
+    steps: List[str]
+    tags: List[str]
+
+@app.post("/admin/upload-document")
+async def upload_document(doc: DocumentUpload):
+    """Admin: Yeni döküman ekle"""
+    try:
+        # Embedding oluştur
+        embedding = model.encode(doc.content).tolist()
+        
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        
+        # Chunk ID oluştur
+        import hashlib
+        chunk_id = hashlib.md5(f"{doc.title}{datetime.now()}".encode()).hexdigest()[:16]
+        
+        cursor.execute("""
+            INSERT INTO rag_documents 
+            (chunk_id, file_name, section_title, content, embedding, page_start)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (chunk_id, doc.category, doc.title, doc.content, embedding, 1))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return {"success": True, "chunk_id": chunk_id}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/admin/create-training")
+async def create_training(training: TrainingContentCreate):
+    """Admin: Yeni eğitim içeriği ekle"""
+    try:
+        # Embedding için text birleştir
+        full_text = f"{training.title}\n{training.description}\n" + "\n".join(training.steps)
+        embedding = model.encode(full_text).tolist()
+        
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        
+        # Training content ekle
+        cursor.execute("""
+            INSERT INTO training_content 
+            (title, description, step_by_step, tags, status, created_at)
+            VALUES (%s, %s, %s, %s, 'active', NOW())
+            RETURNING id
+        """, (training.title, training.description, training.steps, training.tags))
+        
+        training_id = cursor.fetchone()[0]
+        
+        # Embedding ekle
+        cursor.execute("""
+            INSERT INTO training_embeddings (training_id, embedding)
+            VALUES (%s, %s)
+        """, (training_id, embedding))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return {"success": True, "training_id": training_id}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/admin/list-documents")
+async def list_documents(skip: int = 0, limit: int = 20):
+    """Admin: Döküman listesi"""
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT chunk_id, file_name, section_title, 
+               LEFT(content, 100) as preview, created_at
+        FROM rag_documents
+        ORDER BY created_at DESC
+        LIMIT %s OFFSET %s
+    """, (limit, skip))
+    
+    results = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    return {
+        "documents": [
+            {
+                "id": r[0],
+                "category": r[1],
+                "title": r[2],
+                "preview": r[3],
+                "created_at": r[4].isoformat()
+            }
+            for r in results
+        ]
+    }
+
+@app.get("/admin/document/{chunk_id}")
+async def get_document(chunk_id: str):
+    """Admin: Tek döküman getir"""
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT chunk_id, file_name, section_title, content, created_at
+        FROM rag_documents
+        WHERE chunk_id = %s
+    """, (chunk_id,))
+
+    row = cursor.fetchone()
+    cursor.close(); conn.close()
+
+    if not row:
+        return {"success": False, "error": "not found"}
+
+    return {
+        "success": True,
+        "id": row[0],
+        "category": row[1],
+        "title": row[2],
+        "content": row[3],
+        "created_at": row[4].isoformat()
+    }
+
+@app.delete("/admin/document/{chunk_id}")
+async def delete_document(chunk_id: str):
+    """Admin: Döküman sil"""
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+    
+    cursor.execute("DELETE FROM rag_documents WHERE chunk_id = %s", (chunk_id,))
+    conn.commit()
+    
+    deleted = cursor.rowcount > 0
+    cursor.close()
+    conn.close()
+    
+    return {"success": deleted}
+ 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     """Chatbot endpoint"""
@@ -250,7 +399,7 @@ async def get_stats():
 # Terminal testi için
 def interactive_chat():
     """Terminal'de test"""
-    print("🏛️  Troy KB Assistant (Unified RAG)")
+    print("🏛️  Troy Assistant (Unified RAG)")
     print("Çıkmak için 'exit' yazın\n")
     
     while True:
