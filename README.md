@@ -24,10 +24,10 @@ Sistem, **Ollama** üzerinde çalışan **LLaMA 3.2 1B** modelini kullanarak hı
 
 ### ⚙️ Kurulum
 1️⃣ Gereksinimler
-Docker & Docker Compose
-Python 3.9+
-Ollama (LLaMA 3.2 1B modeli kurulmuş olmalı)
-OpenAI API Key (isteğe bağlı, alternatif LLM için)
+- Docker & Docker Compose
+- Python 3.9+
+- Ollama (LLaMA 3.2 1B modeli kurulmuş olmalı)
+- OpenAI API Key (isteğe bağlı, alternatif LLM için)
 
 ### 🧾 Ortam Değişkenleri (.env)  
 Proje dizininde `.env` dosyası oluşturun
