@@ -32,7 +32,7 @@ Sistem, **Ollama** üzerinde çalışan **LLaMA 3.2 1B** modelini kullanarak hı
 ### 🧾 Ortam Değişkenleri (.env)  
 Proje dizininde `.env` dosyası oluşturun
 
-## 🚀 Çalıştırma
+### 🚀 Çalıştırma
 
 1.  Servisleri Başlatma:
     `docker compose up -d`
