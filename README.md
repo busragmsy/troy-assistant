@@ -41,3 +41,11 @@ Proje dizininde `.env` dosyası oluşturun
 ./kb/scripts/emails_ingest_ocr.sh`
 3.  Projeyi çalıştırmak için:
     `python chat_unified.py --api`
+4.  Chatbot Arayüzünü Aç:
+    `http://localhost:3000/web/user/index.html`
+6.  Admin Panel:
+    `http://localhost:3000/web/admin/index.html`
+8.  Docker ortamını durdurma:
+    `docker compose down`
+
+
