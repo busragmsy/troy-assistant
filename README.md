@@ -37,13 +37,15 @@ Proje dizininde `.env` dosyası oluşturun
 2.  Veri Aktarımı:
     `./kb/scripts/pdfs_ingest.sh
 ./kb/scripts/emails_ingest_ocr.sh`
-3.  Projeyi çalıştırmak için:
+3.  Projeyi çalıştırmak için API'yi başlat:
     `python chat_unified.py --api`
-4.  Chatbot Arayüzünü Aç:
+4.  Python HTTP Server:
+    `python -m http.server 3000`
+5.  Tarayıcıda Chatbot Arayüzünü Aç:
     `http://localhost:3000/web/user/index.html`
 6.  Admin Panel:
     `http://localhost:3000/web/admin/index.html`
-8.  Docker ortamını durdurma:
+7.  Docker ortamını durdurma:
     `docker compose down`
 
 
