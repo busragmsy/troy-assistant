@@ -22,8 +22,7 @@ Sistem, **Ollama** üzerinde çalışan **LLaMA 3.2 1B** modelini kullanarak hı
 - Docker ortamında kolay kurulum ve taşınabilirlik  
 - Hibrit arama (vektör + anahtar kelime) ile yüksek doğruluk  
 
-### ⚙️ Kurulum
-1️⃣ Gereksinimler
+### ⚙️ Gereksinimler
 - Docker & Docker Compose
 - Python 3.9+
 - Ollama (LLaMA 3.2 1B modeli kurulmuş olmalı)
@@ -33,7 +32,6 @@ Sistem, **Ollama** üzerinde çalışan **LLaMA 3.2 1B** modelini kullanarak hı
 Proje dizininde `.env` dosyası oluşturun
 
 ### 🚀 Çalıştırma
-
 1.  Servisleri Başlatma:
     `docker compose up -d`
 2.  Veri Aktarımı:
